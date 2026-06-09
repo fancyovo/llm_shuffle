@@ -1,0 +1,185 @@
+# Server Handoff
+
+This document is written for an execution agent that can follow commands but should not redesign the experiment.
+
+## Important Constraints
+
+- Do not run GPU training directly on the login node.
+- Submit GPU work through `sbatch`.
+- Use exactly the tokenizer saved at `tokenizer/skypile_4k_tokenizer.json` after it has been trained.
+- Do not change model size, optimizer settings, context length, or shuffle behavior unless explicitly instructed.
+- Special token IDs 0, 1, 2, and 3 must not be shuffled.
+
+## Directory Map
+
+```text
+configs/                 YAML configuration files
+configs/experiments/     The three experiment configs
+src/llm_shuffle/         Model, data, and training code
+scripts/                 Tokenizer, smoke test, parameter count helpers
+sbatch/                  Slurm job templates
+docs/                    Experiment and handoff docs
+tokenizer/               Saved tokenizer
+runs/                    Training outputs and checkpoints
+logs/slurm/              Slurm stdout and stderr
+```
+
+## Environment Setup
+
+On the server, from the project root:
+
+```bash
+python -m pip install -r requirements.txt
+export PYTHONPATH="$PWD/src"
+```
+
+If the cluster uses modules, load the CUDA/Python module first according to local policy.
+
+## Local Sanity Checks
+
+Run these on a compute node or a login node because they are CPU-only and small:
+
+```bash
+export PYTHONPATH="$PWD/src"
+python scripts/smoke_test.py
+python scripts/count_params.py --config configs/model_50m.yaml
+```
+
+Expected parameter count for the real model is about 49.8M.
+
+## Step 1: Train Tokenizer
+
+Submit:
+
+```bash
+sbatch sbatch/train_tokenizer.sbatch
+```
+
+The tokenizer job reads from the first SkyPile JSONL shard but stops after 100,000,000 UTF-8 text bytes. SkyPile-150B has 437 `data/*.jsonl` shards, about 665GB total, and most shards are around 1-2GB. Do not train on a full shard on a memory-limited machine: Hugging Face BPE training can expand a 1GB shard into tens of GB of RAM. The approved tokenizer setting is 100MB text and 8 tokenizer threads.
+
+After completion, verify:
+
+```bash
+test -f tokenizer/skypile_4k_tokenizer.json
+python - <<'PY'
+from tokenizers import Tokenizer
+t = Tokenizer.from_file("tokenizer/skypile_4k_tokenizer.json")
+for tok in ["<pad>", "<bos>", "<eos>", "<unk>"]:
+    print(tok, t.token_to_id(tok))
+print("vocab", t.get_vocab_size())
+PY
+```
+
+The required IDs are:
+
+```text
+<pad> 0
+<bos> 1
+<eos> 2
+<unk> 3
+vocab 4096
+```
+
+If the tokenizer job fails because the dataset cannot be downloaded, fix Hugging Face network/authentication first. Do not replace the dataset with another corpus without approval.
+
+## Step 2: Run Random Baseline
+
+Submit:
+
+```bash
+sbatch sbatch/random_3b.sbatch
+```
+
+Monitor:
+
+```bash
+tail -f logs/slurm/random-3b-<JOBID>.out
+tail -f runs/random_3b/loss.csv
+```
+
+The target is 3B tokens, about 5723 optimizer steps.
+
+## Step 3: Run Shuffle Pretraining
+
+Submit:
+
+```bash
+sbatch sbatch/shuffle_pretrain_1b.sbatch
+```
+
+Monitor:
+
+```bash
+tail -f logs/slurm/shuffle-1b-<JOBID>.out
+tail -f runs/shuffle_pretrain_1b/loss.csv
+```
+
+The target is 1B tokens, about 1908 optimizer steps.
+
+## Step 4: Run Normal Training From Shuffle Checkpoint
+
+Only start this after `runs/shuffle_pretrain_1b/checkpoints/latest.pt` exists.
+
+Submit:
+
+```bash
+sbatch sbatch/shuffle_then_normal_3b.sbatch
+```
+
+Monitor:
+
+```bash
+tail -f logs/slurm/shuffle-normal-3b-<JOBID>.out
+tail -f runs/shuffle_then_normal_3b/loss.csv
+```
+
+The target is another 3B normal tokens, about 5723 optimizer steps.
+
+## Resume Behavior
+
+Each training config writes a latest checkpoint:
+
+```text
+runs/<run_name>/checkpoints/latest.pt
+```
+
+If the same sbatch job is submitted again, the trainer resumes from that checkpoint by default. It keeps the optimizer state and token counter.
+
+For `shuffle_then_normal_3b`, the first launch loads the shuffle checkpoint as initialization. Later launches resume from `runs/shuffle_then_normal_3b/checkpoints/latest.pt`.
+
+## Loss Comparison
+
+Use the CSV files:
+
+```text
+runs/random_3b/loss.csv
+runs/shuffle_then_normal_3b/loss.csv
+```
+
+Compare `loss` against `tokens_seen`. Do not compare by wall clock time because throughput may differ across jobs.
+
+## Common Failure Cases
+
+### Dataset download failure
+
+Check network access and Hugging Face authentication. The dataset source is fixed as:
+
+```text
+Skywork/SkyPile-150B
+```
+
+### CUDA out of memory
+
+First try keeping the same global token batch by reducing `micro_batch_size` only if it is greater than 1. In this project it is already 1. The next acceptable fallback is increasing `grad_accum_steps` while reducing sequence-level memory pressure only if a code change is approved. Do not reduce `seq_len` without approval because the experiment requires context length 8192.
+
+### Job hits 1 day limit
+
+Resubmit the same sbatch file. The trainer resumes from `latest.pt`.
+
+### Missing tokenizer
+
+Run the tokenizer sbatch first. Training jobs require:
+
+```text
+tokenizer/skypile_4k_tokenizer.json
+```

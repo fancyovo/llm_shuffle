@@ -1,0 +1,21 @@
+include:
+  model: configs/model_50m.yaml
+  train: configs/train_base.yaml
+
+experiment:
+  name: shuffle_pretrain_1b
+  mode: shuffle
+  init_checkpoint: null
+
+train:
+  max_tokens: 1000000000
+
+shuffle:
+  enabled: true
+  permutation_scope: sequence
+  preserve_special_tokens: true
+  first_permutable_id: 4
+  last_permutable_id: 4095
+
+runtime:
+  output_dir: runs/shuffle_pretrain_1b

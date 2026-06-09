@@ -1,0 +1,26 @@
+model:
+  vocab_size: 4096
+  max_seq_len: 8192
+  n_layers: 12
+  d_model: 512
+  n_heads: 8
+  head_dim: 64
+  d_ff: 1792
+  norm_eps: 1.0e-6
+  rope_theta: 10000.0
+  dropout: 0.0
+  attention_dropout: 0.0
+  tie_embeddings: false
+  bias: false
+
+tokenizer:
+  path: tokenizer/skypile_4k_tokenizer.json
+  pad_token: "<pad>"
+  bos_token: "<bos>"
+  eos_token: "<eos>"
+  unk_token: "<unk>"
+  special_token_ids:
+    pad: 0
+    bos: 1
+    eos: 2
+    unk: 3

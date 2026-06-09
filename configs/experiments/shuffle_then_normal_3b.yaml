@@ -1,0 +1,14 @@
+include:
+  model: configs/model_50m.yaml
+  train: configs/train_base.yaml
+
+experiment:
+  name: shuffle_then_normal_3b
+  mode: normal
+  init_checkpoint: runs/shuffle_pretrain_1b/checkpoints/latest.pt
+
+train:
+  max_tokens: 3000000000
+
+runtime:
+  output_dir: runs/shuffle_then_normal_3b
