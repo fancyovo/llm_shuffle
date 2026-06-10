@@ -1,0 +1,6 @@
+include:
+  train: configs/train_base.yaml
+
+scheduler:
+  name: warmup_constant
+  warmup_tokens: 100000000

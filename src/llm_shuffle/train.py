@@ -56,9 +56,14 @@ def get_lr(tokens_seen: int, cfg: dict[str, Any]) -> float:
     base_lr = float(cfg["optimizer"]["learning_rate"])
     min_lr = float(cfg["optimizer"]["min_learning_rate"])
     warmup_tokens = int(cfg["scheduler"]["warmup_tokens"])
+    scheduler_name = str(cfg.get("scheduler", {}).get("name", "cosine"))
     max_tokens = int(cfg["train"]["max_tokens"])
     if tokens_seen < warmup_tokens:
         return base_lr * tokens_seen / max(1, warmup_tokens)
+    if scheduler_name in {"constant", "warmup_constant"}:
+        return base_lr
+    if scheduler_name != "cosine":
+        raise ValueError(f"Unsupported scheduler: {scheduler_name}")
     progress = (tokens_seen - warmup_tokens) / max(1, max_tokens - warmup_tokens)
     progress = min(1.0, max(0.0, progress))
     cosine = 0.5 * (1.0 + math.cos(math.pi * progress))

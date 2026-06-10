@@ -1,0 +1,14 @@
+include:
+  model: configs/model_50m.yaml
+  train: configs/train_constant_lr.yaml
+
+experiment:
+  name: random_3b_constant_lr
+  mode: normal
+  init_checkpoint: null
+
+train:
+  max_tokens: 3000000000
+
+runtime:
+  output_dir: runs_constant/random_3b

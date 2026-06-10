@@ -231,6 +231,32 @@ python scripts/analyze_blind_eval.py
 
 See `docs/GENERATION_BLIND_EVAL.md` for the full procedure. Never write an API key into a tracked file or sbatch script.
 
+## Constant-LR Retraining
+
+For short few-billion-token runs, use the constant-LR experiment line instead
+of the original cosine-decay configs. These configs keep the 100M-token warmup
+and then hold LR at `3e-4`:
+
+```text
+configs/experiments_constant/random_3b.yaml
+configs/experiments_constant/shuffle_pretrain_1b.yaml
+configs/experiments_constant/shuffle_then_normal_3b.yaml
+```
+
+The output root is `runs_constant/`, so the earlier cosine-decay runs under
+`runs/` are not overwritten.
+
+Submit the two high-level jobs:
+
+```bash
+sbatch sbatch/random_3b_constant_lr.sbatch
+sbatch sbatch/shuffle_1b_then_normal_3b_constant_lr.sbatch
+```
+
+The second job runs the shuffle 1B phase and then the normal 3B phase in the
+same Slurm allocation. If the job is interrupted, resubmit the same sbatch file;
+each phase resumes from its own `runs_constant/<run>/checkpoints/latest.pt`.
+
 ## Common Problems
 
 ### Hugging Face download fails

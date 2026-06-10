@@ -25,6 +25,9 @@ runs/                    Training outputs and checkpoints
 logs/slurm/              Slurm stdout and stderr
 ```
 
+Constant-LR retraining outputs use `runs_constant/`; do not mix them with the
+original cosine-decay `runs/` outputs.
+
 ## Environment Setup
 
 On the server, from the project root:
@@ -215,3 +218,18 @@ Run the tokenizer sbatch first. Training jobs require:
 ```text
 tokenizer/skypile_4k_tokenizer.json
 ```
+
+## Constant-LR Retraining Request
+
+The requested rerun keeps warmup but removes LR decay for all few-billion-token
+training phases. Use:
+
+```bash
+sbatch sbatch/random_3b_constant_lr.sbatch
+sbatch sbatch/shuffle_1b_then_normal_3b_constant_lr.sbatch
+```
+
+The experiment group configs live under `configs/experiments_constant/` and
+write to `runs_constant/`. The experimental sbatch runs shuffle pretraining for
+1B tokens first, then immediately launches normal 3B-token training from
+`runs_constant/shuffle_pretrain_1b/checkpoints/latest.pt`.

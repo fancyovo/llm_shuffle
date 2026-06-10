@@ -12,3 +12,8 @@ Start with `docs/AGENT_RUNBOOK.md` when deploying on the server. See `docs/HANDO
 Current recorded result: `random_3b` completed 3B tokens with final loss 2.8660, and `shuffle_then_normal_3b` completed 3B normal tokens from a partially interrupted 823M-token shuffle checkpoint with final loss 2.8280. See `docs/EXPERIMENT_RECORD.md`.
 
 For follow-up generation-quality validation, use the blind A/B workflow in `docs/GENERATION_BLIND_EVAL.md`. API keys, model weights, logs, generated outputs, and judgement results must stay out of Git.
+
+For the constant-LR rerun, use `configs/experiments_constant/` and submit
+`sbatch/random_3b_constant_lr.sbatch` plus
+`sbatch/shuffle_1b_then_normal_3b_constant_lr.sbatch`. These write to
+`runs_constant/` and do not overwrite the earlier cosine-decay runs.

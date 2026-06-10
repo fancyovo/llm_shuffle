@@ -13,6 +13,7 @@ env/
 
 tokenizer/*.tmp
 runs/
+runs_constant/
 logs/
 checkpoints/
 eval/results/
