@@ -6,8 +6,17 @@ __pycache__/
 .venv/
 venv/
 env/
+.env
+.env.*
+*.key
+*api_key*
 
 tokenizer/*.tmp
 runs/
 logs/
 checkpoints/
+eval/results/
+*.pt
+*.pth
+*.ckpt
+*.safetensors

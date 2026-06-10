@@ -4,3 +4,4 @@ tokenizers>=0.20
 PyYAML>=6.0
 tqdm>=4.66
 numpy>=1.26
+huggingface_hub>=0.25

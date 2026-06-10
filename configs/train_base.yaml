@@ -3,14 +3,15 @@ data:
   split: train
   text_field: text
   tokenizer_path: tokenizer/skypile_4k_tokenizer.json
-  streaming: true
+  streaming: false
   shuffle_buffer_size: 10000
   seed: 20260609
+  data_dir: /home/scc/pb24511935/skypile_data
 
 train:
   seq_len: 8192
   precision: bf16
-  compile: true
+  compile: false
   gradient_checkpointing: true
   flash_attention: true
   micro_batch_size: 1

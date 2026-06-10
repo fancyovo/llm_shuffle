@@ -2,6 +2,8 @@
 #SBATCH --job-name=llm-shufnorm-3b
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
+#SBATCH --partition=Students
+#SBATCH --qos=qos_stu_medium_2gpu
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=128G
@@ -11,13 +13,19 @@
 
 set -euo pipefail
 
-cd "$SLURM_SUBMIT_DIR"
+cd /home/scc/pb24511935/llm_shuffle
 mkdir -p logs/slurm runs/shuffle_then_normal_3b
 export PYTHONPATH="$PWD/src"
 
-test -f runs/shuffle_pretrain_1b/checkpoints/latest.pt
+source venv/bin/activate
 
-python -m pip install -r requirements.txt
+# Loss monitor background process (re-plots every 60s)
+python scripts/plot_loss.py --run runs/shuffle_then_normal_3b --save runs/shuffle_then_normal_3b/loss.png --interval 60 &
+MONITOR_PID=$!
+
 torchrun --standalone --nproc_per_node=2 \
   -m llm_shuffle.train \
   --config configs/experiments/shuffle_then_normal_3b.yaml
+
+kill $MONITOR_PID 2>/dev/null || true
+python scripts/plot_loss.py --run runs/shuffle_then_normal_3b --no-watch --save runs/shuffle_then_normal_3b/loss.png

@@ -12,6 +12,8 @@ Run three jobs using the fixed project code:
 
 The comparison is between `runs/random_3b/loss.csv` and `runs/shuffle_then_normal_3b/loss.csv`.
 
+The first completed run is recorded in `docs/EXPERIMENT_RECORD.md`. Read it before launching follow-up experiments so repeated work is not mistaken for a fresh baseline.
+
 ## Do Not Change
 
 - Do not change `seq_len: 8192`.
@@ -199,6 +201,35 @@ runs/shuffle_pretrain_1b/checkpoints/latest.pt
 runs/shuffle_then_normal_3b/loss.csv
 runs/shuffle_then_normal_3b/checkpoints/latest.pt
 ```
+
+Record final numbers and any interruption details in `docs/EXPERIMENT_RECORD.md`. Do not commit files under `runs/`, `logs/`, `eval/results/`, or checkpoint weights.
+
+
+## Blind Generation Evaluation
+
+After the training runs exist, the next validation step is a blind A/B generation test:
+
+```bash
+sbatch sbatch/generate_blind_eval.sbatch
+```
+
+This writes paired model outputs to:
+
+```text
+eval/results/generations_v1.jsonl
+```
+
+After generation completes, run the judge on the login node with the API key only in the environment:
+
+```bash
+read -rsp "DeepSeek API key: " DEEPSEEK_API_KEY
+echo
+export DEEPSEEK_API_KEY
+python scripts/deepseek_blind_judge.py --model deepseek-v4-flash
+python scripts/analyze_blind_eval.py
+```
+
+See `docs/GENERATION_BLIND_EVAL.md` for the full procedure. Never write an API key into a tracked file or sbatch script.
 
 ## Common Problems
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 
 import torch
 from datasets import load_dataset
@@ -25,15 +26,22 @@ class TokenStream:
         streaming: bool,
         shuffle_buffer_size: int,
         seed: int,
+        data_dir: str | None = None,
     ) -> None:
         self.dataset_name = dataset_name
         self.split = split
         self.text_field = text_field
         self.tokenizer = Tokenizer.from_file(tokenizer_path)
         self.eos_id = self.tokenizer.token_to_id("<eos>")
-        ds = load_dataset(dataset_name, split=split, streaming=streaming)
-        if shuffle_buffer_size > 0:
-            ds = ds.shuffle(buffer_size=shuffle_buffer_size, seed=seed)
+
+        local_path = Path(data_dir) if data_dir else None
+        if local_path and local_path.exists():
+            jsonl_pattern = str(local_path / "data" / "*.jsonl")
+            ds = load_dataset("json", data_files=jsonl_pattern, split="train", streaming=False)
+        else:
+            ds = load_dataset(dataset_name, split=split, streaming=streaming)
+            if shuffle_buffer_size > 0:
+                ds = ds.shuffle(buffer_size=shuffle_buffer_size, seed=seed)
         self.dataset = ds
 
     def __iter__(self) -> Iterator[int]:

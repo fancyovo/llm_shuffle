@@ -19,6 +19,7 @@ src/llm_shuffle/         Model, data, and training code
 scripts/                 Tokenizer, smoke test, parameter count helpers
 sbatch/                  Slurm job templates
 docs/                    Experiment and handoff docs
+eval/                    Fixed generation-evaluation prompts; results are ignored
 tokenizer/               Saved tokenizer
 runs/                    Training outputs and checkpoints
 logs/slurm/              Slurm stdout and stderr
@@ -157,6 +158,37 @@ runs/shuffle_then_normal_3b/loss.csv
 ```
 
 Compare `loss` against `tokens_seen`. Do not compare by wall clock time because throughput may differ across jobs.
+
+
+The completed 2026-06-09 to 2026-06-10 run is summarized in `docs/EXPERIMENT_RECORD.md`. It records:
+
+```text
+random_3b:              3.000B tokens, final loss 2.8660
+shuffle_pretrain_1b:    interrupted at 0.823B/1B tokens, final shuffle loss 8.0032
+shuffle_then_normal_3b: 3.000B normal tokens, final loss 2.8280
+```
+
+The reported raw final-loss delta is 0.0381 in favor of `shuffle_then_normal_3b`.
+
+## Blind Generation Evaluation
+
+Use `docs/GENERATION_BLIND_EVAL.md` to test whether the generation-quality difference is statistically meaningful. The workflow is:
+
+```bash
+sbatch sbatch/generate_blind_eval.sbatch
+```
+
+Then, on the login node:
+
+```bash
+read -rsp "DeepSeek API key: " DEEPSEEK_API_KEY
+echo
+export DEEPSEEK_API_KEY
+python scripts/deepseek_blind_judge.py --model deepseek-v4-flash
+python scripts/analyze_blind_eval.py
+```
+
+Do not commit `eval/results/`, model checkpoints, logs, or API keys.
 
 ## Common Failure Cases
 

@@ -117,6 +117,20 @@ def unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
     return model
 
 
+def truncate_csv_on_resume(csv_path: Path, resume_step: int) -> None:
+    """Remove rows at or after resume_step to avoid duplicates on resume."""
+    if not csv_path.exists() or resume_step == 0:
+        return
+    with csv_path.open("r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        rows = [r for r in reader if int(r["step"]) < resume_step]
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def append_csv(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
@@ -161,6 +175,10 @@ def main() -> None:
         step, tokens_seen = load_checkpoint(
             str(resume_path), model, optimizer, resume_training_state=True
         )
+        if rank == 0 and step > 0:
+            csv_path = output_dir / "loss.csv"
+            truncate_csv_on_resume(csv_path, step)
+            print(f"resumed step={step} tokens_seen={tokens_seen} csv_truncated_at_step={step}")
     else:
         init_checkpoint = cfg.get("experiment", {}).get("init_checkpoint")
         load_checkpoint(init_checkpoint, model, optimizer=None, resume_training_state=False)
@@ -180,6 +198,7 @@ def main() -> None:
         streaming=bool(cfg["data"]["streaming"]),
         shuffle_buffer_size=int(cfg["data"]["shuffle_buffer_size"]),
         seed=int(cfg["data"]["seed"]) + rank,
+        data_dir=cfg["data"].get("data_dir"),
     )
     batch_iter = make_lm_batches(
         iter(token_stream),
@@ -242,9 +261,12 @@ def main() -> None:
         throughput = micro_tokens * grad_accum_steps / max(step_time, 1e-9)
 
         if rank == 0 and step % int(cfg["logging"]["log_every"]) == 0:
+            hours, rem = divmod(int(elapsed), 3600)
+            minutes, secs = divmod(rem, 60)
             print(
                 f"step={step} tokens={tokens_seen} loss={accum_loss:.6f} "
-                f"lr={lr:.6e} tok_s={throughput:.1f} elapsed_s={elapsed:.1f}",
+                f"lr={lr:.6e} tok_s={throughput:.1f} "
+                f"elapsed={hours}h{minutes:02d}m{secs:02d}s",
                 flush=True,
             )
         if rank == 0 and step % int(cfg["logging"]["csv_every"]) == 0:
