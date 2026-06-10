@@ -8,10 +8,13 @@ command lines, sbatch files, or repository files.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
+import getpass
 import json
 import os
 import random
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -128,17 +131,22 @@ def main() -> None:
     parser.add_argument("--generations", default="eval/results/generations_v1.jsonl")
     parser.add_argument("--out", default="eval/results/deepseek_judgements_v1.jsonl")
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    parser.add_argument("--api-key-stdin", action="store_true", help="Read API key from hidden stdin prompt instead of environment.")
     parser.add_argument("--api-base", default="https://api.deepseek.com")
     parser.add_argument("--model", default="deepseek-v4-flash")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--blind-seed", type=int, default=20260610)
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--sleep", type=float, default=0.2)
+    parser.add_argument("--sleep", type=float, default=0.0)
+    parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--timeout", type=int, default=90)
     parser.add_argument("--max-retries", type=int, default=4)
     args = parser.parse_args()
 
-    api_key = os.environ.get(args.api_key_env)
+    if args.api_key_stdin:
+        api_key = getpass.getpass("DeepSeek API key: ")
+    else:
+        api_key = os.environ.get(args.api_key_env)
     if not api_key:
         raise SystemExit(f"missing API key env var: {args.api_key_env}")
 
@@ -146,60 +154,69 @@ def main() -> None:
     if args.limit is not None:
         rows = rows[: args.limit]
     done = done_ids(Path(args.out))
+    pending = [row for row in rows if row["pair_id"] not in done]
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    write_lock = threading.Lock()
 
+    def judge_one(index_and_row: tuple[int, dict[str, Any]]) -> dict[str, Any]:
+        index, row = index_and_row
+        label_a, text_a, label_b, text_b = make_ab(row, args.blind_seed)
+        prompt = build_user_prompt(row, text_a, text_b)
+        last_error = ""
+        result: dict[str, Any] | None = None
+        for attempt in range(args.max_retries):
+            try:
+                result = call_chat(
+                    api_key=api_key,
+                    api_base=args.api_base,
+                    model=args.model,
+                    user_prompt=prompt,
+                    temperature=args.temperature,
+                    timeout=args.timeout,
+                )
+                break
+            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
+                last_error = repr(exc)
+                wait = min(30.0, 2.0**attempt)
+                print(f"[retry] {row['pair_id']} attempt={attempt + 1} error={last_error}", flush=True)
+                time.sleep(wait)
+        if result is None:
+            raise RuntimeError(f"failed to judge {row['pair_id']}: {last_error}")
+
+        winner = normalize_winner(result.get("winner"))
+        if winner not in {"A", "B", "Tie", "BothBad"}:
+            winner = "Tie"
+        return {
+            "pair_id": row["pair_id"],
+            "prompt_id": row["prompt_id"],
+            "category": row.get("category", "unknown"),
+            "prompt": row["prompt"],
+            "seed": row["seed"],
+            "judge_model": args.model,
+            "blind_seed": args.blind_seed,
+            "label_a": label_a,
+            "label_b": label_b,
+            "winner": winner,
+            "winner_label": label_a if winner == "A" else label_b if winner == "B" else winner,
+            "confidence": result.get("confidence"),
+            "reason": result.get("reason", ""),
+            "usage": result.get("_usage"),
+            "_index": index,
+        }
+
+    print(f"[judge] pending={len(pending)} concurrency={args.concurrency}", flush=True)
     with Path(args.out).open("a", encoding="utf-8") as f:
-        for index, row in enumerate(rows, start=1):
-            if row["pair_id"] in done:
-                continue
-            label_a, text_a, label_b, text_b = make_ab(row, args.blind_seed)
-            prompt = build_user_prompt(row, text_a, text_b)
-
-            last_error = ""
-            result: dict[str, Any] | None = None
-            for attempt in range(args.max_retries):
-                try:
-                    result = call_chat(
-                        api_key=api_key,
-                        api_base=args.api_base,
-                        model=args.model,
-                        user_prompt=prompt,
-                        temperature=args.temperature,
-                        timeout=args.timeout,
-                    )
-                    break
-                except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
-                    last_error = repr(exc)
-                    wait = min(30.0, 2.0**attempt)
-                    print(f"[retry] {row['pair_id']} attempt={attempt + 1} error={last_error}", flush=True)
-                    time.sleep(wait)
-
-            if result is None:
-                raise RuntimeError(f"failed to judge {row['pair_id']}: {last_error}")
-
-            winner = normalize_winner(result.get("winner"))
-            if winner not in {"A", "B", "Tie", "BothBad"}:
-                winner = "Tie"
-            out = {
-                "pair_id": row["pair_id"],
-                "prompt_id": row["prompt_id"],
-                "category": row.get("category", "unknown"),
-                "prompt": row["prompt"],
-                "seed": row["seed"],
-                "judge_model": args.model,
-                "blind_seed": args.blind_seed,
-                "label_a": label_a,
-                "label_b": label_b,
-                "winner": winner,
-                "winner_label": label_a if winner == "A" else label_b if winner == "B" else winner,
-                "confidence": result.get("confidence"),
-                "reason": result.get("reason", ""),
-                "usage": result.get("_usage"),
-            }
-            f.write(json.dumps(out, ensure_ascii=False) + "\n")
-            f.flush()
-            print(f"[{index}/{len(rows)}] {row['pair_id']} winner={winner}", flush=True)
-            time.sleep(args.sleep)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.concurrency)) as executor:
+            futures = [executor.submit(judge_one, item) for item in enumerate(pending, start=1)]
+            for completed, future in enumerate(concurrent.futures.as_completed(futures), start=1):
+                out = future.result()
+                index = out.pop("_index")
+                with write_lock:
+                    f.write(json.dumps(out, ensure_ascii=False) + "\n")
+                    f.flush()
+                print(f"[{completed}/{len(pending)}] source_index={index} {out['pair_id']} winner={out['winner']}", flush=True)
+                if args.sleep > 0:
+                    time.sleep(args.sleep)
 
 
 if __name__ == "__main__":

@@ -53,8 +53,12 @@ export DEEPSEEK_API_KEY
 python scripts/deepseek_blind_judge.py \
   --generations eval/results/generations_v1.jsonl \
   --out eval/results/deepseek_judgements_v1.jsonl \
-  --model deepseek-v4-flash
+  --model deepseek-v4-flash \
+  --concurrency 64
 ```
+
+
+For interactive use without exporting the key, pass `--api-key-stdin`; the script reads the key with a hidden prompt. Use `--concurrency` to control parallel API calls. The script is resumable, so increasing concurrency is safe as long as duplicate `pair_id` rows are not manually introduced.
 
 The judge sees only:
 
@@ -101,3 +105,26 @@ Automatic degeneration rate is lower for shuffle_then_normal_3b.
 
 If the blind result is close to 50% or the automatic metrics disagree, the
 current qualitative examples should be treated as suggestive but not confirmed.
+
+## Recorded Run: 2026-06-10
+
+The first DeepSeek blind run used `deepseek-v4-flash`, 180 generated pairs, and `--concurrency 64`. Raw outputs are stored under `eval/results/` and are intentionally ignored by Git.
+
+Summary:
+
+```text
+random_3b wins: 11
+shuffle_then_normal_3b wins: 17
+Tie: 0
+BothBad: 152
+Decisive comparisons: 28
+shuffle decisive win rate: 0.6071
+Wilson 95% CI: [0.4241, 0.7643]
+Two-sided sign-test p-value: 0.344928
+
+Automatic degeneration rate:
+random_3b: 0.6444
+shuffle_then_normal_3b: 0.5444
+```
+
+Interpretation: automatic repetition metrics favor `shuffle_then_normal_3b`, but the DeepSeek blind A/B result is not statistically significant because most pairs were judged `BothBad` and only 28 comparisons were decisive. Treat the generation-quality advantage as suggestive, not confirmed.
