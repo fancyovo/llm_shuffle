@@ -157,3 +157,36 @@ story: shuffle 19, random 11
 ```
 
 Interpretation: forced-choice judging again favors `shuffle_then_normal_3b`, especially on continue/explain/story prompts, but the result still does not meet a conventional p < 0.05 threshold on this 180-pair sample.
+
+## Recorded Force-Choice Run: Shuffle-Normal 2B vs Random 3B
+
+A follow-up compared `runs/shuffle_then_normal_3b/checkpoints/step_0004000.pt` against `runs/random_3b/checkpoints/latest.pt`. The shuffle-normal checkpoint is not exactly 2B normal tokens; the exact 2B point is around step 3815, but checkpoints were saved every 500 steps. `step_0004000.pt` corresponds to 2,097,152,000 normal-training tokens after shuffle initialization.
+
+Generation was submitted through Slurm with `sbatch/generate_shuffle_normal_2b_vs_random_3b.sbatch`. DeepSeek judging used `deepseek-v4-flash` with `--force-choice`. Raw outputs are stored under `eval/results/` and are intentionally ignored by Git.
+
+Summary:
+
+```text
+random_3b wins: 75
+shuffle_then_normal_2b_step4000 wins: 105
+Tie: 0
+BothBad: 0
+Decisive comparisons: 180
+shuffle-normal-2B decisive win rate: 0.5833
+Wilson 95% CI: [0.5103, 0.6529]
+Two-sided sign-test p-value: 0.0303695
+
+By category wins:
+continue: shuffle 21, random 9
+explain: shuffle 20, random 10
+fact: shuffle 13, random 17
+opinion: shuffle 18, random 12
+reason: shuffle 15, random 15
+story: shuffle 18, random 12
+
+Automatic degeneration rate:
+random_3b: 0.6444
+shuffle_then_normal_2b_step4000: 0.5111
+```
+
+Interpretation: this forced-choice comparison favors the shuffle-initialized model at the ~2.1B normal-token checkpoint over the random 3B checkpoint, and reaches p < 0.05 on this 180-pair prompt/seed set. The result should be described as `step_0004000` or ~2.1B normal tokens, not exact 2B.
