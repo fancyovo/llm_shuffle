@@ -60,6 +60,8 @@ python scripts/deepseek_blind_judge.py \
 
 For interactive use without exporting the key, pass `--api-key-stdin`; the script reads the key with a hidden prompt. Use `--concurrency` to control parallel API calls. The script is resumable, so increasing concurrency is safe as long as duplicate `pair_id` rows are not manually introduced.
 
+Use `--force-choice` for a relative-quality test that forces the judge to choose `A` or `B` even when both outputs are poor. Write forced-choice results to a separate output file so they are not mixed with the default `Tie`/`BothBad` run.
+
 The judge sees only:
 
 ```text
@@ -128,3 +130,30 @@ shuffle_then_normal_3b: 0.5444
 ```
 
 Interpretation: automatic repetition metrics favor `shuffle_then_normal_3b`, but the DeepSeek blind A/B result is not statistically significant because most pairs were judged `BothBad` and only 28 comparisons were decisive. Treat the generation-quality advantage as suggestive, not confirmed.
+
+## Recorded Force-Choice Run: 2026-06-10
+
+A follow-up DeepSeek run used the same 180 generated pairs and added `--force-choice`, forcing the judge to choose A or B even when both outputs were poor. Raw outputs are stored under `eval/results/` and are intentionally ignored by Git.
+
+Summary:
+
+```text
+random_3b wins: 78
+shuffle_then_normal_3b wins: 102
+Tie: 0
+BothBad: 0
+Decisive comparisons: 180
+shuffle decisive win rate: 0.5667
+Wilson 95% CI: [0.4936, 0.6369]
+Two-sided sign-test p-value: 0.0861873
+
+By category wins:
+continue: shuffle 19, random 11
+explain: shuffle 19, random 11
+fact: shuffle 15, random 15
+opinion: shuffle 16, random 14
+reason: shuffle 14, random 16
+story: shuffle 19, random 11
+```
+
+Interpretation: forced-choice judging again favors `shuffle_then_normal_3b`, especially on continue/explain/story prompts, but the result still does not meet a conventional p < 0.05 threshold on this 180-pair sample.

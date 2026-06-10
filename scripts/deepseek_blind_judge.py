@@ -24,6 +24,8 @@ from typing import Any
 
 SYSTEM_PROMPT = """你是严格的中文文本质量盲评员。你只比较两个候选续写，不知道模型来源。请优先判断是否贴合提示词、是否连贯、是否避免重复循环、语法是否自然、信息量是否更好。不要偏好更长文本；如果两者都明显失败，选择 BothBad；如果差异很小，选择 Tie。只输出 JSON。"""
 
+FORCE_CHOICE_SYSTEM_PROMPT = """你是严格的中文文本质量盲评员。你只比较两个候选续写，不知道模型来源。请优先判断是否贴合提示词、是否连贯、是否避免重复循环、语法是否自然、信息量是否更好。不要偏好更长文本。你必须在 A 和 B 中选出相对更好的一个；即使两者都很差，也要选出较少失败、较少重复、较贴合提示词的一方。禁止输出 Tie 或 BothBad。只输出 JSON。"""
+
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
@@ -48,8 +50,14 @@ def make_ab(row: dict[str, Any], blind_seed: int) -> tuple[str, str, str, str]:
     return label_a, row["outputs"][label_a], label_b, row["outputs"][label_b]
 
 
-def build_user_prompt(row: dict[str, Any], text_a: str, text_b: str) -> str:
-    return f"""请盲评下面两个中文续写。只输出严格 JSON，不要使用 Markdown。
+def build_user_prompt(row: dict[str, Any], text_a: str, text_b: str, force_choice: bool = False) -> str:
+    if force_choice:
+        instruction = "请盲评下面两个中文续写。只输出严格 JSON，不要使用 Markdown。必须二选一，winner 只能是 A 或 B。"
+        schema = '{"winner":"A|B","confidence":1-5,"reason":"不超过80字的中文理由"}'
+    else:
+        instruction = "请盲评下面两个中文续写。只输出严格 JSON，不要使用 Markdown。"
+        schema = '{"winner":"A|B|Tie|BothBad","confidence":1-5,"reason":"不超过80字的中文理由"}'
+    return f"""{instruction}
 
 Prompt:
 {row["prompt"]}
@@ -61,7 +69,7 @@ Answer B:
 {text_b}
 
 输出格式：
-{{"winner":"A|B|Tie|BothBad","confidence":1-5,"reason":"不超过80字的中文理由"}}"""
+{schema}"""
 
 
 def parse_json_response(text: str) -> dict[str, Any]:
@@ -82,12 +90,13 @@ def call_chat(
     model: str,
     user_prompt: str,
     temperature: float,
+    force_choice: bool,
     timeout: int,
 ) -> dict[str, Any]:
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": FORCE_CHOICE_SYSTEM_PROMPT if force_choice else SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
         "temperature": temperature,
@@ -141,6 +150,7 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--timeout", type=int, default=90)
     parser.add_argument("--max-retries", type=int, default=4)
+    parser.add_argument("--force-choice", action="store_true", help="Force the judge to choose A or B; disables Tie and BothBad.")
     args = parser.parse_args()
 
     if args.api_key_stdin:
@@ -161,7 +171,7 @@ def main() -> None:
     def judge_one(index_and_row: tuple[int, dict[str, Any]]) -> dict[str, Any]:
         index, row = index_and_row
         label_a, text_a, label_b, text_b = make_ab(row, args.blind_seed)
-        prompt = build_user_prompt(row, text_a, text_b)
+        prompt = build_user_prompt(row, text_a, text_b, force_choice=args.force_choice)
         last_error = ""
         result: dict[str, Any] | None = None
         for attempt in range(args.max_retries):
@@ -173,6 +183,7 @@ def main() -> None:
                     user_prompt=prompt,
                     temperature=args.temperature,
                     timeout=args.timeout,
+                    force_choice=args.force_choice,
                 )
                 break
             except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
@@ -184,8 +195,9 @@ def main() -> None:
             raise RuntimeError(f"failed to judge {row['pair_id']}: {last_error}")
 
         winner = normalize_winner(result.get("winner"))
-        if winner not in {"A", "B", "Tie", "BothBad"}:
-            winner = "Tie"
+        allowed_winners = {"A", "B"} if args.force_choice else {"A", "B", "Tie", "BothBad"}
+        if winner not in allowed_winners:
+            winner = "A" if args.force_choice else "Tie"
         return {
             "pair_id": row["pair_id"],
             "prompt_id": row["prompt_id"],
