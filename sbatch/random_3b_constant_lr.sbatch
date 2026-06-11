@@ -23,6 +23,7 @@ python scripts/plot_loss.py --run runs_constant/random_3b --save runs_constant/r
 MONITOR_PID=$!
 cleanup() {
   kill "$MONITOR_PID" 2>/dev/null || true
+  wait "$MONITOR_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -31,4 +32,4 @@ torchrun --standalone --nproc_per_node=2 \
   --config configs/experiments_constant/random_3b.yaml
 
 cleanup
-python scripts/plot_loss.py --run runs_constant/random_3b --no-watch --save runs_constant/random_3b/loss.png
+python scripts/plot_loss.py --run runs_constant/random_3b --no-watch --save runs_constant/random_3b/loss.png || true

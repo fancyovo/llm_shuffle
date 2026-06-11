@@ -23,6 +23,7 @@ python scripts/plot_loss.py --run runs_constant/shuffle_pretrain_1b --save runs_
 MONITOR_PID=$!
 cleanup() {
   kill "$MONITOR_PID" 2>/dev/null || true
+  wait "$MONITOR_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -31,7 +32,7 @@ torchrun --standalone --nproc_per_node=2 \
   --config configs/experiments_constant/shuffle_pretrain_1b.yaml
 
 cleanup
-python scripts/plot_loss.py --run runs_constant/shuffle_pretrain_1b --no-watch --save runs_constant/shuffle_pretrain_1b/loss.png
+python scripts/plot_loss.py --run runs_constant/shuffle_pretrain_1b --no-watch --save runs_constant/shuffle_pretrain_1b/loss.png || true
 
 python scripts/plot_loss.py --run runs_constant/shuffle_then_normal_3b --save runs_constant/shuffle_then_normal_3b/loss.png --interval 60 &
 MONITOR_PID=$!
@@ -41,4 +42,4 @@ torchrun --standalone --nproc_per_node=2 \
   --config configs/experiments_constant/shuffle_then_normal_3b.yaml
 
 cleanup
-python scripts/plot_loss.py --run runs_constant/shuffle_then_normal_3b --no-watch --save runs_constant/shuffle_then_normal_3b/loss.png
+python scripts/plot_loss.py --run runs_constant/shuffle_then_normal_3b --no-watch --save runs_constant/shuffle_then_normal_3b/loss.png || true
