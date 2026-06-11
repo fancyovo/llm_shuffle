@@ -21,4 +21,5 @@ For the constant-LR rerun, use `configs/experiments_constant/` and submit
 For the shuffle-pretraining dynamics run, use
 `configs/experiments_shuffle_dynamics/shuffle_pretrain_3b.yaml` and submit
 `sbatch/shuffle_pretrain_3b_dynamics.sbatch`. It writes to
-`runs_shuffle_dynamics/`.
+`runs_shuffle_dynamics/`. To continue the completed 3B checkpoint for another
+7B tokens on new shards, submit `sbatch/shuffle_pretrain_continue_7b.sbatch`.

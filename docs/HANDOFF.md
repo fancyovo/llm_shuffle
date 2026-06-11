@@ -251,3 +251,15 @@ It uses `configs/experiments_shuffle_dynamics/shuffle_pretrain_3b.yaml`, writes
 to `runs_shuffle_dynamics/shuffle_pretrain_3b_v2/`, and does not start a normal
 training phase. The data loader now shards local JSONL data by DDP rank; keep
 that behavior unless explicitly asked to redesign the data pipeline.
+
+The 3B phase has completed. To continue the same checkpoint for another 7B
+tokens, submit:
+
+```bash
+sbatch sbatch/shuffle_pretrain_continue_7b.sbatch
+```
+
+The continuation config reads new shards from
+`/home/scc/pb24511935/skypile_data_continue_7b` and keeps the same output
+directory so model, optimizer, step, and token counter resume from
+`runs_shuffle_dynamics/shuffle_pretrain_3b_v2/checkpoints/latest.pt`.

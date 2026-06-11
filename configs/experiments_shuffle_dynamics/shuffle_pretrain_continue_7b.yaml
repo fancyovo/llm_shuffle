@@ -1,0 +1,24 @@
+include:
+  model: configs/model_50m.yaml
+  train: configs/train_constant_lr.yaml
+
+experiment:
+  name: shuffle_pretrain_3b_plus_7b_dynamics
+  mode: shuffle
+  init_checkpoint: null
+
+data:
+  data_dir: /home/scc/pb24511935/skypile_data_continue_7b
+
+train:
+  max_tokens: 10000000000
+
+shuffle:
+  enabled: true
+  permutation_scope: sequence
+  preserve_special_tokens: true
+  first_permutable_id: 4
+  last_permutable_id: 4095
+
+runtime:
+  output_dir: runs_shuffle_dynamics/shuffle_pretrain_3b_v2

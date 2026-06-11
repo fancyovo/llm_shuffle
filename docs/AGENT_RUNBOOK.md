@@ -273,6 +273,18 @@ Do not reintroduce map-style `Dataset.shuffle(seed)` for local JSONL: it caused
 random-access data reads and slowed throughput from about 200k tok/s to
 60k-100k tok/s.
 
+To continue the completed 3B shuffle-dynamics checkpoint for another 7B tokens,
+use:
+
+```bash
+sbatch sbatch/shuffle_pretrain_continue_7b.sbatch
+```
+
+This is not a restart. It keeps `runtime.output_dir` at
+`runs_shuffle_dynamics/shuffle_pretrain_3b_v2/`, so the trainer resumes
+`checkpoints/latest.pt`, and changes `data.data_dir` to
+`/home/scc/pb24511935/skypile_data_continue_7b`.
+
 ## Common Problems
 
 ### Hugging Face download fails
