@@ -202,8 +202,10 @@ def main() -> None:
         tokenizer_path=cfg["data"]["tokenizer_path"],
         streaming=bool(cfg["data"]["streaming"]),
         shuffle_buffer_size=int(cfg["data"]["shuffle_buffer_size"]),
-        seed=int(cfg["data"]["seed"]) + rank,
+        seed=int(cfg["data"]["seed"]),
         data_dir=cfg["data"].get("data_dir"),
+        rank=rank,
+        world_size=world_size,
     )
     batch_iter = make_lm_batches(
         iter(token_stream),

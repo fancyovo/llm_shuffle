@@ -7,9 +7,9 @@ This project compares two pretraining initializations for a small decoder-only T
 
 The model uses PreNorm, RMSNorm, SwiGLU, RoPE, untied input embeddings and classifier, a 4096-token fixed tokenizer, and an 8192-token context length.
 
-Start with `docs/AGENT_RUNBOOK.md` when deploying on the server. See `docs/HANDOFF.md` for operational details and `docs/EXPERIMENT.md` for the experiment specification.
+Start with `docs/AGENT_RUNBOOK.md` when deploying on the server. See `docs/HANDOFF.md` for operational details, `docs/EXPERIMENT.md` for the experiment specification, and `docs/EXPERIMENT_RECORD.md` for the experiment ledger.
 
-Current recorded result: `random_3b` completed 3B tokens with final loss 2.8660, and `shuffle_then_normal_3b` completed 3B normal tokens from a partially interrupted 823M-token shuffle checkpoint with final loss 2.8280. See `docs/EXPERIMENT_RECORD.md`.
+Current recorded result: the constant-LR rerun completed with `random_3b_constant` final loss 2.8689 and `shuffle_then_normal_3b_constant` final loss 2.8023, but DeepSeek force-choice judging did not show a significant generation-quality win. A new shuffle-only 3B dynamics run is in progress. See `docs/EXPERIMENT_RECORD.md`.
 
 For follow-up generation-quality validation, use the blind A/B workflow in `docs/GENERATION_BLIND_EVAL.md`. API keys, model weights, logs, generated outputs, and judgement results must stay out of Git.
 
@@ -17,3 +17,8 @@ For the constant-LR rerun, use `configs/experiments_constant/` and submit
 `sbatch/random_3b_constant_lr.sbatch` plus
 `sbatch/shuffle_1b_then_normal_3b_constant_lr.sbatch`. These write to
 `runs_constant/` and do not overwrite the earlier cosine-decay runs.
+
+For the shuffle-pretraining dynamics run, use
+`configs/experiments_shuffle_dynamics/shuffle_pretrain_3b.yaml` and submit
+`sbatch/shuffle_pretrain_3b_dynamics.sbatch`. It writes to
+`runs_shuffle_dynamics/`.

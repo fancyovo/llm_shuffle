@@ -12,7 +12,7 @@ Run three jobs using the fixed project code:
 
 The comparison is between `runs/random_3b/loss.csv` and `runs/shuffle_then_normal_3b/loss.csv`.
 
-The first completed run is recorded in `docs/EXPERIMENT_RECORD.md`. Read it before launching follow-up experiments so repeated work is not mistaken for a fresh baseline.
+Experiment history is recorded in `docs/EXPERIMENT_RECORD.md`, with detailed pages under `docs/experiments/`. Read it before launching follow-up experiments so repeated work is not mistaken for a fresh baseline.
 
 ## Do Not Change
 
@@ -202,7 +202,7 @@ runs/shuffle_then_normal_3b/loss.csv
 runs/shuffle_then_normal_3b/checkpoints/latest.pt
 ```
 
-Record final numbers and any interruption details in `docs/EXPERIMENT_RECORD.md`. Do not commit files under `runs/`, `logs/`, `eval/results/`, or checkpoint weights.
+Record final numbers and any interruption details in the relevant detail page under `docs/experiments/`, then update `docs/EXPERIMENT_RECORD.md`. Do not commit files under `runs/`, `runs_constant/`, `runs_shuffle_dynamics/`, `logs/`, `eval/results/`, or checkpoint weights.
 
 
 ## Blind Generation Evaluation
@@ -256,6 +256,22 @@ sbatch sbatch/shuffle_1b_then_normal_3b_constant_lr.sbatch
 The second job runs the shuffle 1B phase and then the normal 3B phase in the
 same Slurm allocation. If the job is interrupted, resubmit the same sbatch file;
 each phase resumes from its own `runs_constant/<run>/checkpoints/latest.pt`.
+
+## Shuffle Dynamics 3B Run
+
+To study the token-id shuffle objective itself beyond the 1B-token transition
+region, use the shuffle-only dynamics config:
+
+```bash
+sbatch sbatch/shuffle_pretrain_3b_dynamics.sbatch
+```
+
+This writes to `runs_shuffle_dynamics/shuffle_pretrain_3b_v2/` and does not
+launch the later normal-training phase. The local JSONL data pipeline now shards
+the dataset by DDP rank so the two GPU ranks do not consume identical examples.
+Do not reintroduce map-style `Dataset.shuffle(seed)` for local JSONL: it caused
+random-access data reads and slowed throughput from about 200k tok/s to
+60k-100k tok/s.
 
 ## Common Problems
 

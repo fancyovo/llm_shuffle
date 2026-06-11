@@ -1,138 +1,69 @@
-# Experiment Record: Shuffle Pretraining Initialization
+# Experiment Record Index
 
-**Date:** 2026-06-09 — 2026-06-10
-**Status:** Completed (shuffle pretrain partially interrupted at 823M/1B tokens)
+This file is the high-level experiment ledger. Each complete attempt has a
+separate detail page under `docs/experiments/`. Generated outputs, checkpoints,
+plots, logs, and DeepSeek judgement files are intentionally ignored by Git; when
+needed, those files are recorded as plain local paths in the detail pages.
 
----
+## Global Setup
 
-## Experimental Conditions
-
-### Model
-
-| Parameter | Value |
-|-----------|-------|
-| Architecture | Decoder-only Transformer (PreNorm, RMSNorm, SwiGLU, RoPE) |
-| Parameters | 49,820,160 |
-| Vocab size | 4096 (byte-level BPE) |
+| Item | Value |
+|------|-------|
+| Model | 49,820,160 parameter decoder-only Transformer |
+| Architecture | PreNorm, RMSNorm, SwiGLU, RoPE |
+| Tokenizer | Fixed 4096-token byte-level BPE |
 | Context length | 8192 |
-| Embedding | Untied (no weight tying) |
-| Bias | Disabled |
+| Batch | 524,288 tokens/optimizer step with 2 GPU DDP |
+| Dataset | Skywork/SkyPile-150B Chinese local JSONL cache |
+| Shuffle mode | Per-sequence random bijection over token IDs 4-4095 |
+| Preserved IDs | 0 `<pad>`, 1 `<bos>`, 2 `<eos>`, 3 `<unk>` |
 
-### Training
+## Experiments
 
-| Parameter | Value |
-|-----------|-------|
-| Precision | bf16 |
-| Optimizer | AdamW (β₁=0.9, β₂=0.95, wd=0.1) |
-| LR schedule | Linear warmup 0.1B → cosine decay to 1/10 |
-| Peak LR | 3e-4 |
-| Min LR | 3e-5 |
-| Gradient clipping | 1.0 |
-| Batch | 524,288 tokens/step (seq_len=8192, micro_bs=1, grad_accum=32, 2 GPU) |
-| Hardware | 2× GPU (RTX 5090 / A100), DDP via torchrun |
-| Throughput | ~200k tok/s |
+| ID | Dates | Status | Main Change | Detail |
+|----|-------|--------|-------------|--------|
+| 001 | 2026-06-09 to 2026-06-10 | Completed | Initial cosine-decay comparison: random 3B vs shuffle 1B plus normal 3B | [001_cosine_decay.md](experiments/001_cosine_decay.md) |
+| 002 | 2026-06-10 to 2026-06-11 | Completed | Constant LR after warmup; shuffle 1B and normal 3B run in one job | [002_constant_lr.md](experiments/002_constant_lr.md) |
+| 003 | 2026-06-11 onward | Running | Token-id shuffle pretraining dynamics for 3B shuffle tokens only, after DDP data sharding fix | [003_shuffle_dynamics_3b.md](experiments/003_shuffle_dynamics_3b.md) |
 
-### Data
+## Change Log
 
-| | |
-|---|---|
-| Dataset | Skywork/SkyPile-150B (Chinese) |
-| Storage | 20 JSONL shards, 20.8 GB, local files |
-| Shuffle buffer | 10,000 samples |
-| Tokenizer | Fixed 4096-token BPE (`tokenizer/skypile_4k_tokenizer.json`) |
+### 001 to 002
 
-### Shuffle Pretrain Mechanism
+- Removed cosine LR decay for short few-billion-token runs.
+- Kept 100M-token warmup, then held LR constant at `3e-4`.
+- Put the experimental path's shuffle 1B phase and normal 3B phase into one
+  Slurm job so the scheduler can queue the whole sequence.
+- Wrote outputs under `runs_constant/` to avoid overwriting the initial run.
 
-For each 8192-token sequence, a random bijection is sampled over token IDs 4–4095.
-The same permutation is applied to both input and labels for that sequence.
-Special tokens (0–3: `<pad>`, `<bos>`, `<eos>`, `<unk>`) are never permuted.
+### 002 to 003
 
----
+- Focus changed from downstream normal-training quality to the intrinsic
+  training dynamics of token-id shuffle pretraining.
+- Added DDP dataset sharding so rank 0 and rank 1 do not consume identical local
+  JSONL examples.
+- Avoided map-style `Dataset.shuffle()` on local JSONL because it caused random
+  Arrow/cache access and cut throughput from about 200k tok/s to 60k-100k tok/s.
+- Started a fresh 3B-token shuffle-only run under `runs_shuffle_dynamics/`.
 
-## Run Log
+## Headline Results
 
-| Run | Config | Steps | Tokens | Final Loss | Status |
-|-----|--------|-------|--------|------------|--------|
-| `random_3b` | `configs/experiments/random_3b.yaml` | 5,723 | 3.000B | 2.866 | ✅ Completed |
-| `shuffle_pretrain_1b` | `configs/experiments/shuffle_pretrain_1b.yaml` | 1,569/1,908 | 0.823B/1B | 8.003 | ⚠️ Interrupted (node preempted) |
-| `shuffle_then_normal_3b` | `configs/experiments/shuffle_then_normal_3b.yaml` | 5,723 | 3.000B | 2.828 | ✅ Completed |
+| Experiment | Loss Result | Generation Evaluation | Interpretation |
+|------------|-------------|-----------------------|----------------|
+| 001 | `shuffle_then_normal_3b` final loss 2.8280 vs `random_3b` 2.8660 | Force-choice DeepSeek favored shuffle 102-78, p=0.086; ~2.1B shuffle-normal checkpoint beat random 3B 105-75, p=0.030 | Suggestive generation advantage, but initial data pipeline had DDP duplication and LR decay |
+| 002 | `shuffle_then_normal_3b_constant` final loss 2.8023 vs `random_3b_constant` 2.8689 | Force-choice DeepSeek 96-84, p=0.412; repetition metrics did not favor shuffle | Clear training-loss advantage; generation-quality advantage not confirmed |
+| 003 | Pending | Not applicable yet | Measures whether shuffle-pretrain loss undergoes a later transition before/after 1B tokens |
 
-### Shuffle Pretrain LR Schedule
+## Important Caveats
 
-```
-0 ──[linear warmup 0.1B]──→ 3e-4 ──[cosine decay 0.9B]──→ 3e-5
-Stopped at 823M tokens, LR ≈ 5.52e-05 (82% decayed)
-```
-
-### 3B Normal Training LR Schedule
-
-```
-0 ──[linear warmup 0.1B]──→ 3e-4 ──[cosine decay 2.9B]──→ 3e-5
-```
-
----
-
-## Results
-
-### Loss Comparison (terminal)
-
-| Metric | random_3b | shuffle_then_normal_3b | Δ |
-|--------|-----------|----------------------|---|
-| Raw final loss | 2.8660 | 2.8280 | **0.0381** |
-| EMA-smoothed final (α=0.02) | 2.9205 | 2.8818 | **0.0386** |
-| Last 100 steps avg | 2.9267 | 2.8880 | **0.0387** |
-
-Shuffle pretrain achieves a consistent ~1.3% loss improvement over random initialization.
-
-### Learning Curves
-
-![Comparison plot](../runs/comparison.png)
-
-Loss vs tokens (log x-axis): [comparison.png](../runs/comparison.png)
-LR schedules: [lr_schedule.png](../runs/lr_schedule.png), [lr_shuffle_1b.png](../runs/lr_shuffle_1b.png)
-
-### Generation Quality
-
-6 prompts evaluated with identical sampling params (temp=0.8, top_k=40, top_p=0.92, seed=42).
-
-Full results: [eval_results.txt](../runs/eval_results.txt)
-
-| Prompt | random_3b | shuffle_then_normal_3b |
-|--------|-----------|----------------------|
-| "中国的首都是" | 偏离到"大学生",陷入重复循环 | 生成公司商业相关,逻辑自洽 |
-| "光合作用是指" | 完全偏离到"供给侧结构性改革",严重重复 | 围绕"光/光子"展开,部分相关 |
-| "从前有座山…" | 故事风格但陷入"老鹰"无限重复 | 有具体场景描述(石头/雕刻),故事感更强 |
-| "如果明天要下雨" | 偏离到具体日期,逻辑断裂 | 简短但语法正确 |
-| "计算机操作系统" | 部分相关但严重重复 | 列功能点,有结构感 |
-| "关于环境保护" | 完全重复"全局观念" | 具体内容(废旧金属/塑料回收),事实合理 |
-
-### Key Observations
-
-1. **Loss improvement is modest but consistent** (~1.3% across all terminal metrics).
-2. **Generation quality difference is substantial** — shuffle pretrain model produces more diverse, less repetitive text across all prompts.
-3. **Random baseline suffers from severe repetition loops** — frequently gets stuck repeating a single phrase.
-4. **Shuffle pretrain model better adheres to topic** and produces more factually-plausible content.
-5. **Both models are limited by size (50M params)** — neither achieves truly fluent conversation, but shuffle pretrain consistently yields better outputs.
-
-### Possible Explanations
-
-- Shuffle pretraining forces the model to learn **positional and co-occurrence patterns** without relying on stable token–meaning mappings.
-- This may act as a regularizer that prevents the model from falling into **brittle, overconfident patterns** (which manifest as repetition loops in generation).
-- The effect is more visible in generation than in loss because loss is averaged over the entire distribution, while repetition is a tail behavior.
-
----
-
-## Output Files
-
-| File | Description |
-|------|-------------|
-| `runs/random_3b/loss.csv` | Random baseline training log |
-| `runs/shuffle_pretrain_1b/loss.csv` | Shuffle pretrain training log |
-| `runs/shuffle_then_normal_3b/loss.csv` | Shuffle → normal training log |
-| `runs/comparison.png` | Loss comparison plot (EMA smoothed, log x) |
-| `runs/eval_results.txt` | Multi-prompt evaluation outputs |
-| `runs/lr_schedule.png` | 3B phase LR schedules |
-| `runs/lr_shuffle_1b.png` | Shuffle pretrain LR schedule |
-| `configs/experiments/random_3b.yaml` | Experiment config |
-| `configs/experiments/shuffle_pretrain_1b.yaml` | Experiment config |
-| `configs/experiments/shuffle_then_normal_3b.yaml` | Experiment config |
+- Experiments 001 and 002 used local JSONL loading without DDP rank sharding, so
+  the two GPU ranks consumed duplicate text streams. Reported token counts are
+  optimizer-token counts, not distinct text-token coverage.
+- Token-id shuffle itself was enabled in the shuffle phases of all experiments;
+  the discovered issue was data sharding/order, not disabled token permutation.
+- Experiment 003 fixes the DDP duplication for new runs, but resume still
+  rebuilds the data iterator from the start. If strict token-level data resume is
+  required, implement and test explicit data-state checkpointing before relying
+  on resumed data order.
+- Do not commit `runs/`, `runs_constant/`, `runs_shuffle_dynamics/`, `logs/`,
+  `eval/results/`, checkpoints, generated samples, judgement files, or API keys.

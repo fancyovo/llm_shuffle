@@ -14,6 +14,7 @@ env/
 tokenizer/*.tmp
 runs/
 runs_constant/
+runs_shuffle_dynamics/
 logs/
 checkpoints/
 eval/results/

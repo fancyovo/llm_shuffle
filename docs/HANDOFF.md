@@ -14,7 +14,9 @@ This document is written for an execution agent that can follow commands but sho
 
 ```text
 configs/                 YAML configuration files
-configs/experiments/     The three experiment configs
+configs/experiments/     Initial cosine-decay experiment configs
+configs/experiments_constant/ Constant-LR comparison configs
+configs/experiments_shuffle_dynamics/ Shuffle-only dynamics configs
 src/llm_shuffle/         Model, data, and training code
 scripts/                 Tokenizer, smoke test, parameter count helpers
 sbatch/                  Slurm job templates
@@ -25,8 +27,9 @@ runs/                    Training outputs and checkpoints
 logs/slurm/              Slurm stdout and stderr
 ```
 
-Constant-LR retraining outputs use `runs_constant/`; do not mix them with the
-original cosine-decay `runs/` outputs.
+Constant-LR retraining outputs use `runs_constant/`; shuffle-dynamics outputs
+use `runs_shuffle_dynamics/`. Do not mix them with the original cosine-decay
+`runs/` outputs.
 
 ## Environment Setup
 
@@ -163,7 +166,9 @@ runs/shuffle_then_normal_3b/loss.csv
 Compare `loss` against `tokens_seen`. Do not compare by wall clock time because throughput may differ across jobs.
 
 
-The completed 2026-06-09 to 2026-06-10 run is summarized in `docs/EXPERIMENT_RECORD.md`. It records:
+The experiment ledger is `docs/EXPERIMENT_RECORD.md`, with detailed per-run
+records under `docs/experiments/`. The initial 2026-06-09 to 2026-06-10 run
+records:
 
 ```text
 random_3b:              3.000B tokens, final loss 2.8660
@@ -233,3 +238,16 @@ The experiment group configs live under `configs/experiments_constant/` and
 write to `runs_constant/`. The experimental sbatch runs shuffle pretraining for
 1B tokens first, then immediately launches normal 3B-token training from
 `runs_constant/shuffle_pretrain_1b/checkpoints/latest.pt`.
+
+## Shuffle Dynamics 3B Request
+
+The current follow-up studies only token-id shuffle pretraining dynamics:
+
+```bash
+sbatch sbatch/shuffle_pretrain_3b_dynamics.sbatch
+```
+
+It uses `configs/experiments_shuffle_dynamics/shuffle_pretrain_3b.yaml`, writes
+to `runs_shuffle_dynamics/shuffle_pretrain_3b_v2/`, and does not start a normal
+training phase. The data loader now shards local JSONL data by DDP rank; keep
+that behavior unless explicitly asked to redesign the data pipeline.

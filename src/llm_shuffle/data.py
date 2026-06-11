@@ -27,12 +27,17 @@ class TokenStream:
         shuffle_buffer_size: int,
         seed: int,
         data_dir: str | None = None,
+        rank: int = 0,
+        world_size: int = 1,
     ) -> None:
         self.dataset_name = dataset_name
         self.split = split
         self.text_field = text_field
         self.tokenizer = Tokenizer.from_file(tokenizer_path)
         self.eos_id = self.tokenizer.token_to_id("<eos>")
+
+        if rank < 0 or world_size < 1 or rank >= world_size:
+            raise ValueError(f"Invalid rank/world_size: rank={rank}, world_size={world_size}")
 
         local_path = Path(data_dir) if data_dir else None
         if local_path and local_path.exists():
@@ -41,7 +46,12 @@ class TokenStream:
         else:
             ds = load_dataset(dataset_name, split=split, streaming=streaming)
             if shuffle_buffer_size > 0:
-                ds = ds.shuffle(buffer_size=shuffle_buffer_size, seed=seed)
+                if streaming:
+                    ds = ds.shuffle(buffer_size=shuffle_buffer_size, seed=seed)
+                else:
+                    ds = ds.shuffle(seed=seed)
+        if world_size > 1:
+            ds = ds.shard(num_shards=world_size, index=rank)
         self.dataset = ds
 
     def __iter__(self) -> Iterator[int]:
