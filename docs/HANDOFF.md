@@ -278,3 +278,20 @@ The continuation config reads new shards from
 `/home/scc/pb24511935/skypile_data_continue_7b` and keeps the same output
 directory so model, optimizer, step, and token counter resume from
 `runs_shuffle_dynamics/shuffle_pretrain_3b_v2/checkpoints/latest.pt`.
+
+## Experiment 004
+
+To train normally from the 10B shuffle checkpoint, submit:
+
+```bash
+sbatch sbatch/shuffle10b_then_normal_3b.sbatch
+```
+
+This job uses `configs/experiments_shuffle_dynamics/shuffle10b_then_normal_3b.yaml`.
+It loads only the model weights from
+`runs_shuffle_dynamics/shuffle_pretrain_3b_v2/checkpoints/step_0019074.pt` into a
+fresh normal-training run under
+`runs_shuffle_dynamics/shuffle10b_then_normal_3b/`. Token-id shuffle is disabled.
+The selected data directory,
+`/home/scc/pb24511935/skypile_data_after_shuffle10b_normal3b`, starts at shards
+estimated to be unseen by the 10B checkpoint.

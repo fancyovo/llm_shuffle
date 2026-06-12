@@ -1,0 +1,17 @@
+include:
+  model: configs/model_50m.yaml
+  train: configs/train_constant_lr.yaml
+
+experiment:
+  name: shuffle10b_then_normal_3b
+  mode: normal
+  init_checkpoint: runs_shuffle_dynamics/shuffle_pretrain_3b_v2/checkpoints/step_0019074.pt
+
+data:
+  data_dir: /home/scc/pb24511935/skypile_data_after_shuffle10b_normal3b
+
+train:
+  max_tokens: 3000000000
+
+runtime:
+  output_dir: runs_shuffle_dynamics/shuffle10b_then_normal_3b

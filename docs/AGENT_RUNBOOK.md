@@ -309,6 +309,44 @@ for interpretation. Results are written under `eval/results/` and ignored by
 Git. Record the important numbers in
 `docs/experiments/003_shuffle_dynamics_3b.md`.
 
+## Normal 3B From 10B Shuffle Weights
+
+Experiment 004 starts from the Experiment 003 10B checkpoint but trains normally
+without token-id shuffle:
+
+```bash
+sbatch sbatch/shuffle10b_then_normal_3b.sbatch
+```
+
+The config uses:
+
+```text
+configs/experiments_shuffle_dynamics/shuffle10b_then_normal_3b.yaml
+```
+
+This is not a training-state resume. On the first launch, the new output
+directory has no `latest.pt`, so `train.py` loads only the model weights from
+`runs_shuffle_dynamics/shuffle_pretrain_3b_v2/checkpoints/step_0019074.pt`.
+Optimizer state, step, token counter, and LR warmup start fresh for the normal
+3B-token run. The sbatch refuses to launch if the output `latest.pt` already
+exists to avoid accidental reuse of an old normal-run state.
+
+If this normal run is interrupted after creating its own checkpoint, resume it
+with:
+
+```bash
+sbatch --export=ALL,ALLOW_NORMAL_RESUME=1 sbatch/shuffle10b_then_normal_3b.sbatch
+```
+
+The data directory is:
+
+```text
+/home/scc/pb24511935/skypile_data_after_shuffle10b_normal3b
+```
+
+It is a symlink directory over suffix shards estimated to be beyond the 7B
+continuation data consumed by the 10B shuffle checkpoint.
+
 ## Common Problems
 
 ### Hugging Face download fails
