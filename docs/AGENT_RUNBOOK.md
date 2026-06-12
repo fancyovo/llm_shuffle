@@ -285,6 +285,30 @@ This is not a restart. It keeps `runtime.output_dir` at
 `checkpoints/latest.pt`, and changes `data.data_dir` to
 `/home/scc/pb24511935/skypile_data_continue_7b`.
 
+After the 10B run has completed, inspect what changed across the shuffle
+transition with the prefill analysis jobs:
+
+```bash
+sbatch sbatch/analyze_shuffle_prefill.sbatch
+sbatch sbatch/analyze_shuffle_prefill_late.sbatch
+```
+
+These jobs run model forward passes and therefore must be submitted through
+Slurm. They compare:
+
+```text
+step_0001500.pt: before the sharp loss drop
+step_0002500.pt: shortly after the sharp loss drop
+step_0019074.pt: final 10B checkpoint
+```
+
+The script evaluates the actual shuffle training objective: it applies the
+fixed token-id permutation seed `20260612` to the selected text, scores the
+permuted next token, and maps top-k predictions back to original token IDs only
+for interpretation. Results are written under `eval/results/` and ignored by
+Git. Record the important numbers in
+`docs/experiments/003_shuffle_dynamics_3b.md`.
+
 ## Common Problems
 
 ### Hugging Face download fails

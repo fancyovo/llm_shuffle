@@ -24,7 +24,7 @@ needed, those files are recorded as plain local paths in the detail pages.
 |----|-------|--------|-------------|--------|
 | 001 | 2026-06-09 to 2026-06-10 | Completed | Initial cosine-decay comparison: random 3B vs shuffle 1B plus normal 3B | [001_cosine_decay.md](experiments/001_cosine_decay.md) |
 | 002 | 2026-06-10 to 2026-06-11 | Completed | Constant LR after warmup; shuffle 1B and normal 3B run in one job | [002_constant_lr.md](experiments/002_constant_lr.md) |
-| 003 | 2026-06-11 onward | Running | Token-id shuffle pretraining dynamics: completed 3B shuffle tokens, then continued for another 7B on new shards | [003_shuffle_dynamics_3b.md](experiments/003_shuffle_dynamics_3b.md) |
+| 003 | 2026-06-11 to 2026-06-12 | Completed | Token-id shuffle pretraining dynamics: trained 3B shuffle tokens, continued to 10B on new shards, then compared pre/post/final prefill distributions | [003_shuffle_dynamics_3b.md](experiments/003_shuffle_dynamics_3b.md) |
 
 ## Change Log
 
@@ -48,6 +48,9 @@ needed, those files are recorded as plain local paths in the detail pages.
 - After the 3B run completed, downloaded non-overlapping SkyPile shards into
   `/home/scc/pb24511935/skypile_data_continue_7b` and submitted a continuation
   job to train the same checkpoint to 10B cumulative tokens.
+- After the 10B run completed, added a Slurm-only prefill analysis that scores
+  long real text under the fixed token-id shuffle objective and maps top-k
+  predictions back to original token IDs for interpretation.
 
 ## Headline Results
 
@@ -55,7 +58,7 @@ needed, those files are recorded as plain local paths in the detail pages.
 |------------|-------------|-----------------------|----------------|
 | 001 | `shuffle_then_normal_3b` final loss 2.8280 vs `random_3b` 2.8660 | Force-choice DeepSeek favored shuffle 102-78, p=0.086; ~2.1B shuffle-normal checkpoint beat random 3B 105-75, p=0.030 | Suggestive generation advantage, but initial data pipeline had DDP duplication and LR decay |
 | 002 | `shuffle_then_normal_3b_constant` final loss 2.8023 vs `random_3b_constant` 2.8689 | Force-choice DeepSeek 96-84, p=0.412; repetition metrics did not favor shuffle | Clear training-loss advantage; generation-quality advantage not confirmed |
-| 003 | 3B shuffle-only run finished at loss 6.5143; 7B continuation submitted | Not applicable yet | Measures whether shuffle-pretrain loss undergoes later transitions beyond 3B tokens |
+| 003 | 3B shuffle-only run finished at loss 6.5143; 10B continuation finished at loss 6.2041 | Prefill analysis, not generation: pre to post transition improves mean NLL by 0.91-1.52 on two 8192-token samples; post to final improves another 0.44-0.69 | Transition mainly sharpens repeated/frequent tokens, separators, punctuation, digits, and document-format patterns; rare first occurrences slightly worsen |
 
 ## Important Caveats
 

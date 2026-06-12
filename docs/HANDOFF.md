@@ -259,6 +259,21 @@ tokens, submit:
 sbatch sbatch/shuffle_pretrain_continue_7b.sbatch
 ```
 
+The 10B shuffle-dynamics run has completed. To reproduce the checkpoint
+prefill comparison, submit:
+
+```bash
+sbatch sbatch/analyze_shuffle_prefill.sbatch
+sbatch sbatch/analyze_shuffle_prefill_late.sbatch
+```
+
+Do not run these directly on the login node because they load checkpoints and
+perform model forward passes. The analysis uses the fixed token-id permutation
+seed `20260612`, scores the permuted next-token target, and maps top-k
+predictions back to original token IDs for interpretation. Local outputs are
+under `eval/results/shuffle_prefill_analysis*` and are ignored by Git; the
+recorded conclusion is in `docs/experiments/003_shuffle_dynamics_3b.md`.
+
 The continuation config reads new shards from
 `/home/scc/pb24511935/skypile_data_continue_7b` and keeps the same output
 directory so model, optimizer, step, and token counter resume from
